@@ -2,10 +2,12 @@
 
 import asyncio
 import os
+import re
 from datetime import datetime
 from typing import Callable, List, Union
 
 import pyrogram
+import requests
 from loguru import logger
 from pyrogram import types
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
@@ -236,6 +238,13 @@ class DownloadBot:
                 download_from_link,
                 filters=pyrogram.filters.regex(r"^https://t.me.*")
                 & pyrogram.filters.user(self.allowed_user_ids),
+            )
+        )
+        self.bot.add_handler(
+            MessageHandler(
+                download_from_t_link,
+                filters=pyrogram.filters.regex(r"^https://twitter.*")
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
@@ -631,11 +640,74 @@ async def download_from_link(client: pyrogram.Client, message: pyrogram.types.Me
     await client.send_message(
         message.from_user.id, msg, parse_mode=pyrogram.enums.ParseMode.HTML
     )
+def download_image_file(url, file):
+    r = requests.get(url)
+    with open(file, 'wb') as f:
+        f.write(r.content)
+        print(" # 写入DONE")
 
+async def download_from_t_link(client: pyrogram.Client, message: pyrogram.types.Message):
+    """
+    Downloads a single message from a Telegram link.
+
+    Parameters:
+        client (pyrogram.Client): The pyrogram client.
+        message (pyrogram.types.Message): The message containing the Telegram link.
+
+    Returns:
+        None
+    """
+    match = re.search(r'\d+$', message.text)
+    fileName = match.group()
+    file_path  = os.path.join(_bot.app.save_path, "twitter", "{}.mp4".format(fileName))
+    if os.path.exists(file_path):
+        message = await client.send_message(
+            message.from_user.id,
+            f"{_t('From')} {_t('download')} 文件已存在!",
+            reply_to_message_id=message.id,
+        )
+        return
+    import requests
+    os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
+    os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
+    headers = {
+        'authority': 'api.tgx.one',
+        'accept': '*/*',
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+        'if-none-match': 'W/"7af-lMN4qEWnHzebG+KCaE7YV4s/9WU"',
+        'origin': 'https://tgx.one',
+        'referer': 'https://tgx.one/',
+        'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Microsoft Edge";v="120"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-site',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+    }
+
+    url = "https://twitter.com/i/status/1744411894956642591"
+    response = requests.get(
+        'https://api.tgx.one/telegram/qTweet?url={}'.format(url),
+        headers=headers,
+    )
+    if (response.status_code == 200):
+        dataList = response.json()["data"]["media"][0]["video_info"]["variants"]
+        ret = max(dataList, key=lambda dic: dic.get('bitrate') if dic.get('bitrate') else 0)
+        url = ret["url"]
+        message = await client.send_message(
+            message.from_user.id,
+            f"{_t('From')} {_t('download')} {url}!",
+            reply_to_message_id=message.id,
+        )
+        check_dir(os.path.join(_bot.app.save_path, "twitter"))
+        download_image_file(url, file_path)
 
 # pylint: disable = R0912, R0915,R0914
 
-
+def check_dir(dir:str):
+    if not os.path.exists(dir):
+        os.makedirs(dir)
 async def download_from_bot(client: pyrogram.Client, message: pyrogram.types.Message):
     """Download from bot"""
 
