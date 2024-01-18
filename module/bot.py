@@ -13,6 +13,8 @@ from pyrogram import types
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from ruamel import yaml
+from bilix import DownloaderBilibili
+import asyncio
 
 import utils
 from module.app import (
@@ -41,6 +43,7 @@ from module.pyrogram_extension import (
 from utils.format import replace_date_time, validate_title
 from utils.meta_data import MetaData
 from utils.updates import get_latest_release
+
 
 # pylint: disable = C0301, R0902
 
@@ -135,11 +138,11 @@ class DownloadBot:
             self._yaml.dump(self.config, yaml_file)
 
     async def start(
-        self,
-        app: Application,
-        client: pyrogram.Client,
-        add_download_task: Callable,
-        download_chat_task: Callable,
+            self,
+            app: Application,
+            client: pyrogram.Client,
+            add_download_task: Callable,
+            download_chat_task: Callable,
     ):
         """Start bot"""
         self.bot = pyrogram.Client(
@@ -216,28 +219,28 @@ class DownloadBot:
             MessageHandler(
                 download_from_bot,
                 filters=pyrogram.filters.command(["download"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 forward_messages,
                 filters=pyrogram.filters.command(["forward"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 download_forward_media,
                 filters=pyrogram.filters.media
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 download_from_link,
                 filters=pyrogram.filters.regex(r"^https://t.me.*")
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
@@ -249,44 +252,51 @@ class DownloadBot:
         )
         self.bot.add_handler(
             MessageHandler(
+                download_from_bili_link,
+                filters=pyrogram.filters.regex(r"^https://www.bilibili.*")
+                        & pyrogram.filters.user(self.allowed_user_ids),
+            )
+        )
+        self.bot.add_handler(
+            MessageHandler(
                 set_listen_forward_msg,
                 filters=pyrogram.filters.command(["listen_forward"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 help_command,
                 filters=pyrogram.filters.command(["help"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 get_info,
                 filters=pyrogram.filters.command(["get_info"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 help_command,
                 filters=pyrogram.filters.command(["start"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 set_language,
                 filters=pyrogram.filters.command(["set_language"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
         self.bot.add_handler(
             MessageHandler(
                 add_filter,
                 filters=pyrogram.filters.command(["add_filter"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
 
@@ -294,7 +304,7 @@ class DownloadBot:
             MessageHandler(
                 stop,
                 filters=pyrogram.filters.command(["stop"])
-                & pyrogram.filters.user(self.allowed_user_ids),
+                        & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
 
@@ -318,10 +328,10 @@ _bot = DownloadBot()
 
 
 async def start_download_bot(
-    app: Application,
-    client: pyrogram.Client,
-    add_download_task: Callable,
-    download_chat_task: Callable,
+        app: Application,
+        client: pyrogram.Client,
+        add_download_task: Callable,
+        download_chat_task: Callable,
 ):
     """Start download bot"""
     await _bot.start(app, client, add_download_task, download_chat_task)
@@ -531,11 +541,11 @@ async def add_filter(client: pyrogram.Client, message: pyrogram.types.Message):
 
 
 async def direct_download(
-    download_bot: DownloadBot,
-    chat_id: Union[str, int],
-    message: pyrogram.types.Message,
-    download_message: pyrogram.types.Message,
-    client: pyrogram.Client = None,
+        download_bot: DownloadBot,
+        chat_id: Union[str, int],
+        message: pyrogram.types.Message,
+        download_message: pyrogram.types.Message,
+        client: pyrogram.Client = None,
 ):
     """Direct Download"""
 
@@ -567,7 +577,7 @@ async def direct_download(
 
 
 async def download_forward_media(
-    client: pyrogram.Client, message: pyrogram.types.Message
+        client: pyrogram.Client, message: pyrogram.types.Message
 ):
     """
     Downloads the media from a forwarded message.
@@ -640,11 +650,42 @@ async def download_from_link(client: pyrogram.Client, message: pyrogram.types.Me
     await client.send_message(
         message.from_user.id, msg, parse_mode=pyrogram.enums.ParseMode.HTML
     )
-def download_image_file(url, file):
-    r = requests.get(url)
-    with open(file, 'wb') as f:
-        f.write(r.content)
-        print(" # 写入DONE")
+
+
+async def download_with_progress(url, file_path, callback, client, message, last):
+    response = requests.get(url, stream=True)
+
+    total_size = int(response.headers.get('content-length', 0))
+    downloaded_size = 0
+    update_percentage = total_size * 0.05  # 5% 更新一次
+
+    with open(file_path, 'wb') as file:
+        for data in response.iter_content(chunk_size=1024):
+            downloaded_size += len(data)
+            file.write(data)
+
+            # 当下载量超过 5% 时，调用回调函数
+            if downloaded_size >= update_percentage:
+                await callback(url, downloaded_size, total_size, client, message, last)
+                update_percentage += total_size * 0.05
+
+    # 确保最后一次调用回调函数
+    await callback(url, downloaded_size, total_size, client, message, last)
+
+
+def bytes_to_megabytes(bytes_size):
+    megabytes = bytes_size / (1024.0 ** 2)
+    return round(megabytes, 1)
+
+
+async def progress_callback(url, downloaded_size, total_size, client, message, last):
+    percent = (downloaded_size / total_size) * 100
+    await client.edit_message_text(
+        message.from_user.id,
+        last.id,
+        f"Downloaded: '{url}' :{bytes_to_megabytes(downloaded_size)} M / {bytes_to_megabytes(total_size)} M ({percent:.2f}%)"
+    )
+
 
 async def download_from_t_link(client: pyrogram.Client, message: pyrogram.types.Message):
     """
@@ -659,7 +700,7 @@ async def download_from_t_link(client: pyrogram.Client, message: pyrogram.types.
     """
     match = re.search(r'\d+$', message.text)
     fileName = match.group()
-    file_path  = os.path.join(_bot.app.save_path, "twitter", "{}.mp4".format(fileName))
+    file_path = os.path.join(_bot.app.save_path, "twitter", "{}.mp4".format(fileName))
     if os.path.exists(file_path):
         message = await client.send_message(
             message.from_user.id,
@@ -686,28 +727,45 @@ async def download_from_t_link(client: pyrogram.Client, message: pyrogram.types.
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
     }
 
-    url = "https://twitter.com/i/status/1744411894956642591"
     response = requests.get(
-        'https://api.tgx.one/telegram/qTweet?url={}'.format(url),
+        'https://api.tgx.one/telegram/qTweet?url={}'.format(message.text),
         headers=headers,
     )
     if (response.status_code == 200):
         dataList = response.json()["data"]["media"][0]["video_info"]["variants"]
         ret = max(dataList, key=lambda dic: dic.get('bitrate') if dic.get('bitrate') else 0)
         url = ret["url"]
-        message = await client.send_message(
+        message3 = await client.send_message(
             message.from_user.id,
             f"{_t('From')} {_t('download')} {url}!",
             reply_to_message_id=message.id,
         )
         check_dir(os.path.join(_bot.app.save_path, "twitter"))
-        download_image_file(url, file_path)
+        await download_with_progress(url, file_path, progress_callback, client, message, message3)
+        await _bot.app.upload_file(file_path)
+
 
 # pylint: disable = R0912, R0915,R0914
 
-def check_dir(dir:str):
+async def download_from_bili_link(client: pyrogram.Client, message: pyrogram.types.Message):
+    async def main():
+        os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
+        os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
+        async with DownloaderBilibili(videos_dir=_bot.app.save_path + "/bilibili") as d:
+            await d.get_video(str(message.text))
+    a = await main()
+    message3 = await client.send_message(
+        message.from_user.id,
+        f"{_t('From')} {_t('download')} ok!",
+        reply_to_message_id=message.id,
+    )
+
+
+def check_dir(dir: str):
     if not os.path.exists(dir):
         os.makedirs(dir)
+
+
 async def download_from_bot(client: pyrogram.Client, message: pyrogram.types.Message):
     """Download from bot"""
 
@@ -799,14 +857,14 @@ async def download_from_bot(client: pyrogram.Client, message: pyrogram.types.Mes
 
 
 async def get_forward_task_node(
-    client: pyrogram.Client,
-    message: pyrogram.types.Message,
-    task_type: TaskType,
-    src_chat_link: str,
-    dst_chat_link: str,
-    offset_id: int = 0,
-    end_offset_id: int = 0,
-    download_filter: str = None,
+        client: pyrogram.Client,
+        message: pyrogram.types.Message,
+        task_type: TaskType,
+        src_chat_link: str,
+        dst_chat_link: str,
+        offset_id: int = 0,
+        end_offset_id: int = 0,
+        download_filter: str = None,
 ):
     """Get task node"""
     limit: int = 0
@@ -962,12 +1020,12 @@ async def forward_messages(client: pyrogram.Client, message: pyrogram.types.Mess
     if not node.has_protected_content:
         try:
             async for item in get_chat_history_v2(  # type: ignore
-                _bot.client,
-                node.chat_id,
-                limit=node.limit,
-                max_id=node.end_offset_id,
-                offset_id=offset_id,
-                reverse=True,
+                    _bot.client,
+                    node.chat_id,
+                    limit=node.limit,
+                    max_id=node.end_offset_id,
+                    offset_id=offset_id,
+                    reverse=True,
             ):
                 await forward_normal_content(client, node, item)
                 if node.is_stop_transmission:
@@ -991,7 +1049,7 @@ async def forward_messages(client: pyrogram.Client, message: pyrogram.types.Mess
 
 
 async def forward_normal_content(
-    client: pyrogram.Client, node: TaskNode, message: pyrogram.types.Message
+        client: pyrogram.Client, node: TaskNode, message: pyrogram.types.Message
 ):
     """Forward normal content"""
     forward_ret = ForwardStatus.FailedForward
@@ -1029,7 +1087,7 @@ async def forward_msg(node: TaskNode, message_id: int):
 
 
 async def set_listen_forward_msg(
-    client: pyrogram.Client, message: pyrogram.types.Message
+        client: pyrogram.Client, message: pyrogram.types.Message
 ):
     """
     Set the chat to listen for forwarded messages.
@@ -1126,10 +1184,10 @@ async def stop(client: pyrogram.Client, message: pyrogram.types.Message):
 
 
 async def stop_task(
-    client: pyrogram.Client,
-    query: pyrogram.types.CallbackQuery,
-    queryHandler: str,
-    task_type: TaskType,
+        client: pyrogram.Client,
+        query: pyrogram.types.CallbackQuery,
+        queryHandler: str,
+        task_type: TaskType,
 ):
     """Stop task"""
     if query.data == queryHandler:
@@ -1180,7 +1238,7 @@ async def stop_task(
 
 
 async def on_query_handler(
-    client: pyrogram.Client, query: pyrogram.types.CallbackQuery
+        client: pyrogram.Client, query: pyrogram.types.CallbackQuery
 ):
     """
     Asynchronous function that handles query callbacks.
