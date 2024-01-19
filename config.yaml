@@ -1,8 +1,9 @@
-api_hash: your_api_hash
-api_id: your_api_id
+api_hash: 6aff8a9bf1cce3db766e2ebfb9423520
+api_id: 13259570
+bot_token: 5420753409:AAEs4y-runZWuLA4DTx36oaAkT7hKroTYko
 chat:
-- chat_id: telegram_chat_id
-  last_read_message_id: 0
+- chat_id: HuiMouYiXiao2023
+  last_read_message_id: 47000000
 file_formats:
   audio:
   - all
@@ -22,3 +23,15 @@ media_types:
 - video_note
 # in linux please use /
 # save_path: E:\github\telegram_media_downloader
+proxy:
+  hostname: 127.0.0.1
+  port: 7890
+  scheme: socks5
+disable_syslog: []
+save_path: E:\Program Files\telegram_media_downloader-2.2.0\downloads
+language: EN
+
+upload_drive:
+  enable_upload_file: true
+  remote_dir: drive:/aliyun
+  rclone_path: D:\Programs\rclone\rclone.exe
