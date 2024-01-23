@@ -290,3 +290,9 @@ proxy:
 <img alt="Code style: black" style="width:30%" src="./screenshot/alipay.JPG">
 <img alt="Code style: black" style="width:30%" src="./screenshot/wechat.JPG">
 </p>
+
+
+#  安装 yt-dlp
+python -m pip install -U --pre yt-dlp
+
+# 安装ffmpeg

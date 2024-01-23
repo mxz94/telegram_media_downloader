@@ -259,6 +259,13 @@ class DownloadBot:
         )
         self.bot.add_handler(
             MessageHandler(
+                download_from_youtube_link,
+                filters=pyrogram.filters.regex(r"^https://www.youtube.*")
+                        & pyrogram.filters.user(self.allowed_user_ids),
+            )
+        )
+        self.bot.add_handler(
+            MessageHandler(
                 set_listen_forward_msg,
                 filters=pyrogram.filters.command(["listen_forward"])
                         & pyrogram.filters.user(self.allowed_user_ids),
@@ -751,7 +758,7 @@ async def download_from_bili_link(client: pyrogram.Client, message: pyrogram.typ
     async def main():
         os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
         os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
-        async with DownloaderBilibili(videos_dir=_bot.app.save_path + "/bilibili") as d:
+        async with DownloaderBilibili(videos_dir=_bot.app.save_path + "/bilibili", sess_data="e05fddc5%2C1721205960%2C8b7b6%2A11CjDvphzjOWn9VUFZ3McrMItwZKHV-7PK8r3dZGnTlUFlAaDiKfw3NnYO1v37Wo8REHESVmQydjFaRkRSTnZ1SmE3MWdyRXhUZ3dWNGdCUmtsX3hVZ0psNkZFOThRLVhhbWIzNWZpREg5TFhFd3VQM0lWc2Znd3RjOTM0c0hFVUNlV1BEaG4zUjVBIIEC") as d:
             await d.get_video(str(message.text))
     a = await main()
     message3 = await client.send_message(
@@ -759,7 +766,28 @@ async def download_from_bili_link(client: pyrogram.Client, message: pyrogram.typ
         f"{_t('From')} {_t('download')} ok!",
         reply_to_message_id=message.id,
     )
-
+def run_cmd( cmd_str='', echo_print=1):
+    """
+    执行cmd命令，不显示执行过程中弹出的黑框
+    备注：subprocess.run()函数会将本来打印到cmd上的内容打印到python执行界面上，所以避免了出现cmd弹出框的问题
+    :param cmd_str: 执行的cmd命令
+    :return:
+    """
+    from subprocess import run
+    if echo_print == 1:
+        print('\n执行cmd指令="{}"'.format(cmd_str))
+    run(cmd_str, shell=True)
+def download_from_youtube_link(client: pyrogram.Client, message: pyrogram.types.Message):
+    url = str(message.text)
+    parts = url.split('&', 1)
+    # 如果有分隔符，保留第一个子字符串
+    url = parts[0] if len(parts) > 0 else url
+    run_cmd("yt-dlp -P " + _bot.app.save_path + "/youtube " + url)
+    client.send_message(
+        message.from_user.id,
+        f"{_t('From')} {_t('download')} ok!",
+        reply_to_message_id=message.id,
+    )
 
 def check_dir(dir: str):
     if not os.path.exists(dir):
