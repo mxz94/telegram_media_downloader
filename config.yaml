@@ -1,6 +1,6 @@
 api_hash: 6aff8a9bf1cce3db766e2ebfb9423520
 api_id: 13259570
-bot_token: 5420753409:AAEs4y-runZWuLA4DTx36oaAkT7hKroTYko
+bot_token: 5420753409:AAEJTATYXvMWgEKVL-aTdISDb_vt3U3OmjU
 chat:
 - chat_id: HuiMouYiXiao2023
   last_read_message_id: 47000000
@@ -29,9 +29,15 @@ proxy:
   scheme: socks5
 disable_syslog: []
 save_path: E:\Program Files\telegram_media_downloader-2.2.0\downloads
-language: EN
+language: ZH
 
+#upload_drive:
+#  enable_upload_file: true
+#  remote_dir: drive:/aliyun
+#  rclone_path: D:\Programs\rclone\rclone.exe
 upload_drive:
+  upload_adapter: aligo
   enable_upload_file: true
-  remote_dir: drive:/aliyun
-  rclone_path: D:\Programs\rclone\rclone.exe
+  before_upload_file_zip: false
+  after_upload_file_delete: false
+  remote_dir: tg

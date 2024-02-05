@@ -5,6 +5,7 @@ import os
 import re
 from datetime import datetime
 from typing import Callable, List, Union
+from urllib.parse import urlparse
 
 import pyrogram
 import requests
@@ -260,7 +261,7 @@ class DownloadBot:
         self.bot.add_handler(
             MessageHandler(
                 download_from_youtube_link,
-                filters=pyrogram.filters.regex(r"^https://www.youtube.*")
+                filters=pyrogram.filters.regex(r"^https://www\.youtube\.com/.*|^https://youtu\.be/.*|^https://youtube\..*")
                         & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
@@ -705,16 +706,9 @@ async def download_from_t_link(client: pyrogram.Client, message: pyrogram.types.
     Returns:
         None
     """
+    print(str(message.text))
     match = re.search(r'\d+$', message.text)
-    fileName = match.group()
-    file_path = os.path.join(_bot.app.save_path, "twitter", "{}.mp4".format(fileName))
-    if os.path.exists(file_path):
-        message = await client.send_message(
-            message.from_user.id,
-            f"{_t('From')} {_t('download')} 文件已存在!",
-            reply_to_message_id=message.id,
-        )
-        return
+    fileName = datetime.now().strftime("%Y%m%d%H%M%S")
     import requests
     os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
     os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
@@ -742,24 +736,45 @@ async def download_from_t_link(client: pyrogram.Client, message: pyrogram.types.
         dataList = response.json()["data"]["media"][0]["video_info"]["variants"]
         ret = max(dataList, key=lambda dic: dic.get('bitrate') if dic.get('bitrate') else 0)
         url = ret["url"]
+        url_path = urlparse(url).path
+        # 用os.path获取文件名
+        fileName = os.path.basename(url_path)
+        file_path = os.path.join(_bot.app.save_path, "twitter", fileName)
+        if os.path.exists(file_path):
+            message = await client.send_message(
+                message.from_user.id,
+                f"{_t('From')} {_t('download')} 文件已存在!",
+                reply_to_message_id=message.id,
+            )
+            return
         message3 = await client.send_message(
             message.from_user.id,
             f"{_t('From')} {_t('download')} {url}!",
             reply_to_message_id=message.id,
         )
         check_dir(os.path.join(_bot.app.save_path, "twitter"))
-        await download_with_progress(url, file_path, progress_callback, client, message, message3)
-        await _bot.app.upload_file(file_path)
+        try:
+            await download_with_progress(url, file_path, progress_callback, client, message, message3)
+        except Exception as e:
+            pass
+        try:
+            await _bot.app.upload_file(file_path)
+        except Exception as e:
+            pass
+
+        return True
 
 
 # pylint: disable = R0912, R0915,R0914
 
 async def download_from_bili_link(client: pyrogram.Client, message: pyrogram.types.Message):
+    url = str(message.text)
+    print(url)
     async def main():
         os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
         os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
         async with DownloaderBilibili(videos_dir=_bot.app.save_path + "/bilibili", sess_data="e05fddc5%2C1721205960%2C8b7b6%2A11CjDvphzjOWn9VUFZ3McrMItwZKHV-7PK8r3dZGnTlUFlAaDiKfw3NnYO1v37Wo8REHESVmQydjFaRkRSTnZ1SmE3MWdyRXhUZ3dWNGdCUmtsX3hVZ0psNkZFOThRLVhhbWIzNWZpREg5TFhFd3VQM0lWc2Znd3RjOTM0c0hFVUNlV1BEaG4zUjVBIIEC") as d:
-            await d.get_video(str(message.text))
+            await d.get_video(url)
     a = await main()
     message3 = await client.send_message(
         message.from_user.id,
@@ -777,13 +792,14 @@ def run_cmd( cmd_str='', echo_print=1):
     if echo_print == 1:
         print('\n执行cmd指令="{}"'.format(cmd_str))
     run(cmd_str, shell=True)
-def download_from_youtube_link(client: pyrogram.Client, message: pyrogram.types.Message):
+async def  download_from_youtube_link(client: pyrogram.Client, message: pyrogram.types.Message):
     url = str(message.text)
+    print(url)
     parts = url.split('&', 1)
     # 如果有分隔符，保留第一个子字符串
     url = parts[0] if len(parts) > 0 else url
     run_cmd("yt-dlp -P " + _bot.app.save_path + "/youtube " + url)
-    client.send_message(
+    message3 = await client.send_message(
         message.from_user.id,
         f"{_t('From')} {_t('download')} ok!",
         reply_to_message_id=message.id,

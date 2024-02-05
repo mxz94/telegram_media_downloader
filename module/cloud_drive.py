@@ -152,7 +152,7 @@ class CloudDrive:
                 + "/"
                 + os.path.dirname(local_file_path).replace(save_path, "")
                 + "/"
-            ).replace("\\", "/")
+            ).replace("\\", "/").replace("//", "/")
 
             if not drive_config.dir_cache.get(remote_dir):
                 CloudDrive.aligo_mkdir(drive_config, remote_dir)
