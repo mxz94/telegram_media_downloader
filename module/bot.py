@@ -3,6 +3,7 @@
 import asyncio
 import os
 import re
+import subprocess
 from datetime import datetime
 from typing import Callable, List, Union
 from urllib.parse import urlparse
@@ -792,18 +793,69 @@ def run_cmd( cmd_str='', echo_print=1):
     if echo_print == 1:
         print('\n执行cmd指令="{}"'.format(cmd_str))
     run(cmd_str, shell=True)
+
+async def progress_callback(url, downloaded_size, total_size, client, message, last):
+    percent = (downloaded_size / total_size) * 100
+    await client.edit_message_text(
+        message.from_user.id,
+        last.id,
+        f"Downloaded: '{url}' :{bytes_to_megabytes(downloaded_size)} M / {bytes_to_megabytes(total_size)} M ({percent:.2f}%)"
+    )
+last_percent_reported = 0
+def create_hook(client, message, last):
+    def my_hook(d):
+        global last_percent_reported
+        percent = d['_percent_str']  # 获取当前下载进度
+        percent = percent.replace('%', '')  # 去除百分号
+        percent = float(percent)  # 转换为浮点数字
+        percent = round(percent)
+
+        # 检查是否有需要报告的新进度（即当前进度是否为10%的整数倍并且大于最后一次报告的进度）
+        if percent % 10 == 0 and percent > last_percent_reported:
+            print(f"当前下载进度：{percent}%")
+            client.edit_message_text(
+                message.from_user.id,
+                last.id,
+                f"Download： '{d['_percent_str']} %' :{d['_total_bytes_str']}  "
+            )
+            last_percent_reported = percent
+    return my_hook
+
 async def  download_from_youtube_link(client: pyrogram.Client, message: pyrogram.types.Message):
     url = str(message.text)
     print(url)
     parts = url.split('&', 1)
     # 如果有分隔符，保留第一个子字符串
     url = parts[0] if len(parts) > 0 else url
-    run_cmd("yt-dlp -P " + _bot.app.save_path + "/youtube " + url)
+    from yt_dlp import YoutubeDL
     message3 = await client.send_message(
         message.from_user.id,
-        f"{_t('From')} {_t('download')} ok!",
+        f"{_t('From')} {_t('download')}!",
         reply_to_message_id=message.id,
     )
+    my2_hook = create_hook(client, message, message3)
+    ydl_opts = {
+        'outtmpl': _bot.app.save_path + '/youtube/%(id)s.%(ext)s',
+        'format': 'bestvideo+bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mp4',
+        }],
+        'progress_hooks': [my2_hook],
+    }
+    with YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.download([url])
+    # run_cmd("yt-dlp -P " + _bot.app.save_path + "/youtube " + url)
+    # message3 = await client.send_message(
+    #     message.from_user.id,
+    #     f"{_t('From')} {_t('download')} ok!",
+    #     reply_to_message_id=message.id,
+    # )
+    # file_path = os.path.join(_bot.app.save_path, "youtube", fileName)
+    # try:
+    #     await _bot.app.upload_file(file_path)
+    # except Exception as e:
+    #     pass
 
 def check_dir(dir: str):
     if not os.path.exists(dir):
@@ -1299,3 +1351,34 @@ async def on_query_handler(
         queryHandler = QueryHandlerStr.get_str(it.value)
         if queryHandler in query.data:
             await stop_task(client, query, queryHandler, TaskType(it.value))
+
+def my_hook(d):
+    d['_percent_str']
+    d['_total_bytes_str']
+    if d['status'] == 'finished':
+        file_tuple = os.path.split(os.path.abspath(d['filename']))
+
+if __name__ == '__main__':
+    from yt_dlp import YoutubeDL
+    ydl_opts = {
+        'outtmpl': 'E:/Program Files/telegram_media_downloader-2.2.0/downloads/youtube/%(id)s.%(ext)s',
+        'format': 'bestvideo+bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mp4',
+        }],
+        'progress_hooks': [my_hook],
+    }
+    with YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.download(['https://youtube.com/shorts/R6i5Xabqr2I?si=CccLEsS4Gocreiv7'])
+        print(info_dict)
+        # video_url = info_dict.get("url", None)
+        # video_id = info_dict.get("id", None)
+        # video_title = info_dict.get('title', None)
+        # print("Title: " + video_title) # <= Here, you got the video title
+    # from subprocess import run
+    # result = run(    "yt-dlp -P E:\Program Files\telegram_media_downloader-2.2.0\downloads/youtube https://youtube.com/shorts/R6i5Xabqr2I?si=CccLEsS4Gocreiv7"
+    #         , shell=True, stdout=subprocess.PIPE)
+    # output = result.stdout.decode('utf-8')
+    #
+    # print(output)
