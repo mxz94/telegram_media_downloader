@@ -355,7 +355,7 @@ class Application:
         self.total_download_task = 0
 
         self.chat_download_config: dict = {}
-
+        self.sess_data: str = ""
         self.save_path = os.path.join(os.path.abspath("."), "downloads")
         self.temp_save_path = os.path.join(os.path.abspath("."), "temp")
         self.api_id: str = ""
@@ -417,6 +417,9 @@ class Application:
         # TODO: judge the storage if enough,and provide more path
         if _config.get("save_path") is not None:
             self.save_path = _config["save_path"]
+
+        if _config.get("sess_data") is not None:
+            self.sess_data = _config["sess_data"]
 
         self.api_id = _config["api_id"]
         self.api_hash = _config["api_hash"]

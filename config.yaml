@@ -30,7 +30,7 @@ proxy:
 disable_syslog: []
 save_path: E:\Program Files\telegram_media_downloader-2.2.0\downloads
 language: ZH
-
+sess_data: 65cd9aab%2C1724045921%2C028e5%2A21CjBzSCc6iKCTqKxMJ6MIWHUEFJnaqB-hTZO5VnVRGsPiCIQCus_bZl2zWxv8eQsLgNsSVk9sblNLYzBFRTJEdm93SzZyWExlUW8zRnFXNGF2VEZhQklUUERlOWNFMnA2Um5EbnZYUTVBeTd3T1c1Z1NkLTRRVkNpTk5wak92UFpITjlnTnpQNzZ3IIEC
 #upload_drive:
 #  enable_upload_file: true
 #  remote_dir: drive:/aliyun

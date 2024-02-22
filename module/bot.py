@@ -4,18 +4,21 @@ import asyncio
 import os
 import re
 import subprocess
+import threading
+import time
 from datetime import datetime
 from typing import Callable, List, Union
 from urllib.parse import urlparse
 
 import pyrogram
 import requests
+from bilix.utils import legal_title
 from loguru import logger
 from pyrogram import types
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from ruamel import yaml
-from bilix import DownloaderBilibili
+from bilix import DownloaderBilibili, api
 import asyncio
 
 import utils
@@ -255,7 +258,7 @@ class DownloadBot:
         self.bot.add_handler(
             MessageHandler(
                 download_from_bili_link,
-                filters=pyrogram.filters.regex(r"^https://www.bilibili.*")
+                filters=pyrogram.filters.regex(r"^https://www.bilibili.*|https://b23\.tv/\w+")
                         & pyrogram.filters.user(self.allowed_user_ids),
             )
         )
@@ -774,8 +777,16 @@ async def download_from_bili_link(client: pyrogram.Client, message: pyrogram.typ
     async def main():
         os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
         os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
-        async with DownloaderBilibili(videos_dir=_bot.app.save_path + "/bilibili", sess_data="e05fddc5%2C1721205960%2C8b7b6%2A11CjDvphzjOWn9VUFZ3McrMItwZKHV-7PK8r3dZGnTlUFlAaDiKfw3NnYO1v37Wo8REHESVmQydjFaRkRSTnZ1SmE3MWdyRXhUZ3dWNGdCUmtsX3hVZ0psNkZFOThRLVhhbWIzNWZpREg5TFhFd3VQM0lWc2Znd3RjOTM0c0hFVUNlV1BEaG4zUjVBIIEC") as d:
+        async with DownloaderBilibili(videos_dir=_bot.app.save_path + "/bilibili", sess_data=_bot.app.sess_data) as d:
+            video_info = await api.bilibili.get_video_info(d.client, url)
+            p_name = video_info.pages[video_info.p].p_name
+            title = legal_title(video_info.h1_title, p_name)
+            file_name = p_name if len(video_info.h1_title) > 50 and '' and p_name else title
             await d.get_video(url)
+            try:
+                await _bot.app.upload_file(_bot.app.save_path + "/bilibili" + "/" + file_name + ".mp4")
+            except Exception as e:
+                pass
     a = await main()
     message3 = await client.send_message(
         message.from_user.id,
@@ -802,25 +813,50 @@ async def progress_callback(url, downloaded_size, total_size, client, message, l
         f"Downloaded: '{url}' :{bytes_to_megabytes(downloaded_size)} M / {bytes_to_megabytes(total_size)} M ({percent:.2f}%)"
     )
 last_percent_reported = 0
-def create_hook(client, message, last):
-    def my_hook(d):
+def create_hook(client: pyrogram.Client, message, last):
+    async def my_hook(d):
         global last_percent_reported
         percent = d['_percent_str']  # 获取当前下载进度
+        status = d['status']  # 获取当前下载进度
         percent = percent.replace('%', '')  # 去除百分号
         percent = float(percent)  # 转换为浮点数字
         percent = round(percent)
+        filename1 = d["filename"]
 
         # 检查是否有需要报告的新进度（即当前进度是否为10%的整数倍并且大于最后一次报告的进度）
         if percent % 10 == 0 and percent > last_percent_reported:
             print(f"当前下载进度：{percent}%")
-            client.edit_message_text(
+            await client.send_message(
                 message.from_user.id,
                 last.id,
                 f"Download： '{d['_percent_str']} %' :{d['_total_bytes_str']}  "
             )
             last_percent_reported = percent
+        if (status == "finished"):
+            (filepath, filename) = os.path.split(filename1)
+        # 找到第一个点分割
+            filename = filename.split('.', 1)[0]
+            file_path = os.path.join(_bot.app.save_path, "youtube", filename + ".webm")
+            asyncio.create_task(down(file_path))
+            # t = threading.Thread(target=down, args=(file_path,file_path2))
+            # t.start()
     return my_hook
 
+async def down(file_path):
+    i = 5
+    while True:
+        if os.path.exists(file_path):
+            try:
+                await _bot.app.upload_file(file_path)
+            except Exception as e:
+                print(e)
+                pass
+            break
+        if i > 600:
+            print("下载失败")
+            break
+        time.sleep(i)
+        i = i + 5
 async def  download_from_youtube_link(client: pyrogram.Client, message: pyrogram.types.Message):
     url = str(message.text)
     print(url)
@@ -833,18 +869,19 @@ async def  download_from_youtube_link(client: pyrogram.Client, message: pyrogram
         f"{_t('From')} {_t('download')}!",
         reply_to_message_id=message.id,
     )
-    my2_hook = create_hook(client, message, message3)
+    my2_hook = create_hook(client , message, message3)
     ydl_opts = {
         'outtmpl': _bot.app.save_path + '/youtube/%(id)s.%(ext)s',
         'format': 'bestvideo+bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }],
+        # 'postprocessors': [{
+        #     'key': 'FFmpegVideoConvertor',
+        #     'preferedformat': 'mp4',
+        # }],
         'progress_hooks': [my2_hook],
     }
     with YoutubeDL(ydl_opts) as ydl:
         info_dict = ydl.download([url])
+    print(info_dict)
     # run_cmd("yt-dlp -P " + _bot.app.save_path + "/youtube " + url)
     # message3 = await client.send_message(
     #     message.from_user.id,
