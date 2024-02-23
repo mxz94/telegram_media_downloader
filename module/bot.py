@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import random
 import re
 import subprocess
 import threading
@@ -45,6 +46,7 @@ from module.pyrogram_extension import (
     set_meta_data,
     upload_telegram_chat_message,
 )
+from utils.fanyi import translate
 from utils.format import replace_date_time, validate_title
 from utils.meta_data import MetaData
 from utils.updates import get_latest_release
@@ -814,7 +816,7 @@ async def progress_callback(url, downloaded_size, total_size, client, message, l
     )
 last_percent_reported = 0
 def create_hook(client: pyrogram.Client, message, last):
-    async def my_hook(d):
+    def my_hook(d):
         global last_percent_reported
         percent = d['_percent_str']  # 获取当前下载进度
         status = d['status']  # 获取当前下载进度
@@ -826,18 +828,18 @@ def create_hook(client: pyrogram.Client, message, last):
         # 检查是否有需要报告的新进度（即当前进度是否为10%的整数倍并且大于最后一次报告的进度）
         if percent % 10 == 0 and percent > last_percent_reported:
             print(f"当前下载进度：{percent}%")
-            await client.send_message(
+            client.send_message(
                 message.from_user.id,
                 last.id,
                 f"Download： '{d['_percent_str']} %' :{d['_total_bytes_str']}  "
             )
             last_percent_reported = percent
-        if (status == "finished"):
-            (filepath, filename) = os.path.split(filename1)
-        # 找到第一个点分割
-            filename = filename.split('.', 1)[0]
-            file_path = os.path.join(_bot.app.save_path, "youtube", filename + ".webm")
-            asyncio.create_task(down(file_path))
+        # if (status == "finished"):
+        #     (filepath, filename) = os.path.split(filename1)
+        # # 找到第一个点分割
+        #     filename = filename.split('.', 1)[0]
+        #     file_path = os.path.join(_bot.app.save_path, "youtube", filename + ".webm")
+        #     asyncio.create_task(down(file_path))
             # t = threading.Thread(target=down, args=(file_path,file_path2))
             # t.start()
     return my_hook
@@ -880,8 +882,27 @@ async def  download_from_youtube_link(client: pyrogram.Client, message: pyrogram
         'progress_hooks': [my2_hook],
     }
     with YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.download([url])
-    print(info_dict)
+        info_dict = ydl.extract_info(url)
+    ext = info_dict["ext"]
+    id = info_dict["id"]
+    title = info_dict["title"]
+    try:
+        title = translate(title)
+    except Exception as e:
+        title = title
+    old_file_name = os.path.join(_bot.app.save_path, "youtube", id + "." + ext)
+    new_file_name = os.path.join(_bot.app.save_path, "youtube", title + "." + ext)
+    try:
+        file_name = new_file_name
+        os.rename(old_file_name, new_file_name)
+    except Exception as e:
+        file_name = old_file_name
+    if os.path.exists(file_name):
+        try:
+            await _bot.app.upload_file(file_name)
+        except Exception as e:
+            print(e)
+            pass
     # run_cmd("yt-dlp -P " + _bot.app.save_path + "/youtube " + url)
     # message3 = await client.send_message(
     #     message.from_user.id,
