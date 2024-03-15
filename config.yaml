@@ -39,5 +39,5 @@ upload_drive:
   upload_adapter: aligo
   enable_upload_file: true
   before_upload_file_zip: false
-  after_upload_file_delete: false
+  after_upload_file_delete: true
   remote_dir: tg

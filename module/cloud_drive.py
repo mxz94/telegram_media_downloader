@@ -50,7 +50,7 @@ class CloudDrive:
         """Initialize the upload adapter."""
         if drive_config.upload_adapter == "aligo":
             Aligo = importlib.import_module("aligo").Aligo
-            drive_config.aligo = Aligo(name="aligo2")
+            drive_config.aligo = Aligo(name="aligo")
 
     @staticmethod
     def rclone_mkdir(drive_config: CloudDriveConfig, remote_dir: str):
